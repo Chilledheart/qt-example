@@ -36,6 +36,9 @@ elseif(WIN32)
   set(OS_POSIX OFF)
 endif()
 
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_language(C)
 enable_language(CXX)
 
