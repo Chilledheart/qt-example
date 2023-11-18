@@ -168,7 +168,7 @@ function(find_qt_plugins)
       PARENT_SCOPE)
 endfunction()
 
-find_qt(COMPONENTS Core Gui Widgets Network Svg Xml)
+find_qt(COMPONENTS Widgets Network Svg Xml COMPONENTS_LINUX Gui)
 find_package(ZLIB)
 find_package(CURL REQUIRED)
 
@@ -189,7 +189,13 @@ add_executable(example
   example.cpp
   )
 
-target_link_libraries(example PRIVATE Qt::Gui Qt::Widgets)
+target_link_libraries(example PRIVATE Qt::Widgets Qt::Svg Qt::Xml Qt::Network)
+
+set_target_properties(
+  example
+  PROPERTIES AUTOMOC ON
+             AUTOUIC ON
+             AUTORCC ON)
 
 function(copy_directory src_dir dst_dir)
   file(GLOB additionalFiles RELATIVE ${src_dir} "${src_dir}/*")
