@@ -14,6 +14,7 @@ project(${PACKAGE_NAME} NONE)
 ## Export build compilation database if possible
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/Modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/common")
 # Set OS-specific constants in non-deprecated way
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -43,6 +44,14 @@ enable_language(C)
 enable_language(CXX)
 
 include(buildspec)
+
+if (OS_WINDOWS)
+  if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX
+        "${CMAKE_BINARY_DIR}/rundir"
+        CACHE STRING "Directory to install OBS after building" FORCE)
+  endif()
+endif()
 
 # find_qt: Macro to find best possible Qt version for use with the project:
 macro(find_qt)
@@ -103,9 +112,32 @@ if (WIN32)
   add_definitions(-D_UNICODE)
 endif()
 
+include(CopyMSVCBins)
 add_executable(example
   WIN32
   example.cpp
   )
 
 target_link_libraries(example PRIVATE Qt::Gui Qt::Widgets)
+
+if (MSVC)
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(ADDITIONAL_FILES_DIR ${CMAKE_SOURCE_DIR}/additional_install_files/exec64d)
+  else()
+    set(ADDITIONAL_FILES_DIR ${CMAKE_SOURCE_DIR}/additional_install_files/exec64r)
+  endif()
+  file(GLOB additionalFiles RELATIVE ${ADDITIONAL_FILES_DIR} "${ADDITIONAL_FILES_DIR}/*")
+  foreach(FILENAME ${additionalFiles})
+    if(IS_DIRECTORY "${ADDITIONAL_FILES_DIR}/${FILENAME}")
+      set(_cmake_command "copy_directory")
+    else()
+      set(_cmake_command "copy")
+    endif()
+    add_custom_command(
+      TARGET example
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E ${_cmake_command} "${ADDITIONAL_FILES_DIR}/${FILENAME}" "${CMAKE_BINARY_DIR}/${FILENAME}"
+      COMMENT "Copy run ${FILENAME} to rundir"
+      VERBATIM)
+  endforeach()
+endif()
