@@ -11,8 +11,6 @@ set(PACKAGE_NAME            "qt-example")
 # Defer enabling C and CXX languages.
 project(${PACKAGE_NAME} NONE)
 
-enable_language(CXX)
-
 ## Export build compilation database if possible
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
@@ -37,6 +35,9 @@ elseif(WIN32)
   set(OS_WINDOWS ON)
   set(OS_POSIX OFF)
 endif()
+
+enable_language(C)
+enable_language(CXX)
 
 include(buildspec)
 
