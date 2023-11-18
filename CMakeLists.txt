@@ -99,7 +99,78 @@ macro(find_qt)
   endforeach()
 endmacro()
 
-find_qt(COMPONENTS Core Gui Widgets)
+# find_qt_plugins: Find and add Qt plugin libraries associated with Qt component to target
+function(find_qt_plugins)
+  set(oneValueArgs COMPONENT TARGET FOUND_VAR)
+  cmake_parse_arguments(var "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  string(REPLACE "::" ";" library_tuple "${var_COMPONENT}")
+  list(GET library_tuple 0 library_namespace)
+  list(GET library_tuple 1 library_name)
+
+  if(NOT ${library_namespace} MATCHES "Qt[56]?")
+    message(FATAL_ERROR "'find_qt_plugins' has to be called with a valid target from the Qt, Qt5, or Qt6 namespace.")
+  endif()
+
+  list(
+    APPEND
+    qt_plugins_Core
+    platforms
+    printsupport
+    styles
+    imageformats
+    iconengines)
+  list(APPEND qt_plugins_Gui platforminputcontexts virtualkeyboard)
+  list(APPEND qt_plugins_Network bearer)
+  list(APPEND qt_plugins_Sql sqldrivers)
+  list(APPEND qt_plugins_Multimedia mediaservice audio)
+  list(APPEND qt_plugins_3dRender sceneparsers geometryloaders)
+  list(APPEND qt_plugins_3dQuickRender renderplugins)
+  list(APPEND qt_plugins_Positioning position)
+  list(APPEND qt_plugins_Location geoservices)
+  list(APPEND qt_plugins_TextToSpeech texttospeech)
+  list(APPEND qt_plugins_WebView webview)
+
+  if(qt_plugins_${library_name})
+    get_target_property(library_location ${var_COMPONENT} IMPORTED_LOCATION)
+    get_target_property(is_framework ${var_COMPONENT} FRAMEWORK)
+
+    if(is_framework)
+      # Resolve Qt plugin location relative to framework binary location on macOS
+      set(plugins_location "../../../../../plugins")
+      cmake_path(ABSOLUTE_PATH plugins_location BASE_DIRECTORY "${library_location}" NORMALIZE)
+    else()
+      # Resolve Qt plugin location relative to dynamic library location
+      set(plugins_location "../../plugins")
+      cmake_path(ABSOLUTE_PATH plugins_location BASE_DIRECTORY "${library_location}" NORMALIZE)
+    endif()
+
+    foreach(plugin IN ITEMS ${qt_plugins_${library_name}})
+      if(NOT plugin IN_LIST plugins_list)
+        if(EXISTS "${plugins_location}/${plugin}")
+          # Gather all .dll or .dylib files in given plugin subdirectory
+          file(
+            GLOB plugin_libraries
+            RELATIVE "${plugins_location}/${plugin}"
+            "${plugins_location}/${plugin}/*.dylib" "${plugins_location}/${plugin}/*.dll")
+          message(DEBUG "Found Qt plugin ${plugin} libraries: ${plugin_libraries}")
+          foreach(plugin_library IN ITEMS ${plugin_libraries})
+            set(plugin_full_path "${plugins_location}/${plugin}/${plugin_library}")
+            list(APPEND plugins_list ${plugin_full_path})
+          endforeach()
+        endif()
+      endif()
+    endforeach()
+  endif()
+
+  set(${var_FOUND_VAR}
+      ${plugins_list}
+      PARENT_SCOPE)
+endfunction()
+
+find_qt(COMPONENTS Core Gui Widgets Network Svg Xml)
+find_package(ZLIB)
+find_package(CURL REQUIRED)
 
 if (WIN32)
   add_definitions(-D_WIN32)
@@ -120,15 +191,10 @@ add_executable(example
 
 target_link_libraries(example PRIVATE Qt::Gui Qt::Widgets)
 
-if (MSVC)
-  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(ADDITIONAL_FILES_DIR ${CMAKE_SOURCE_DIR}/additional_install_files/exec64d)
-  else()
-    set(ADDITIONAL_FILES_DIR ${CMAKE_SOURCE_DIR}/additional_install_files/exec64r)
-  endif()
-  file(GLOB additionalFiles RELATIVE ${ADDITIONAL_FILES_DIR} "${ADDITIONAL_FILES_DIR}/*")
+function(copy_directory src_dir dst_dir)
+  file(GLOB additionalFiles RELATIVE ${src_dir} "${src_dir}/*")
   foreach(FILENAME ${additionalFiles})
-    if(IS_DIRECTORY "${ADDITIONAL_FILES_DIR}/${FILENAME}")
+    if(IS_DIRECTORY "${src_dir}/${FILENAME}")
       set(_cmake_command "copy_directory")
     else()
       set(_cmake_command "copy")
@@ -136,8 +202,18 @@ if (MSVC)
     add_custom_command(
       TARGET example
       POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E ${_cmake_command} "${ADDITIONAL_FILES_DIR}/${FILENAME}" "${CMAKE_BINARY_DIR}/${FILENAME}"
+      COMMAND ${CMAKE_COMMAND} -E ${_cmake_command} "${src_dir}/${FILENAME}" "${dst_dir}/${FILENAME}"
       COMMENT "Copy run ${FILENAME} to rundir"
       VERBATIM)
   endforeach()
+endfunction()
+
+if (MSVC)
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(ADDITIONAL_FILES_DIR ${CMAKE_SOURCE_DIR}/additional_install_files/exec64d)
+  else()
+    set(ADDITIONAL_FILES_DIR ${CMAKE_SOURCE_DIR}/additional_install_files/exec64r)
+  endif()
+  copy_directory(${CMAKE_SOURCE_DIR}/additional_install_files/exec64 ${CMAKE_BINARY_DIR})
+  copy_directory(${ADDITIONAL_FILES_DIR} ${CMAKE_BINARY_DIR})
 endif()
